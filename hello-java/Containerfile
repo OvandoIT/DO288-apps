@@ -2,6 +2,12 @@ FROM   registry.access.redhat.com/ubi8/ubi:8.0
 
 MAINTAINER   Red Hat Training <training@redhat.com>
 
+LABEL io.openshift.expose-services="8080:http"
+LABEL io.k8s.description="A basic Apache HTTP Server child image, uses ONBUILD" \
+      io.k8s.display-name="Apache HTTP Server" \
+      io.openshift.expose-services="8080:http" \
+      io.openshift.tags="apache, httpd"
+
 # command line options to pass to the JVM
 ENV	  JAVA_OPTIONS -Xmx512m
 
@@ -10,19 +16,23 @@ ENV	  JAVA_OPTIONS -Xmx512m
 RUN   yum install -y --disableplugin=subscription-manager java-1.8.0-openjdk-headless && \
       yum clean all --disableplugin=subscription-manager -y && \
       useradd wildfly && \
-      mkdir -p /opt/app-root/bin
-
+      mkdir -p /opt/app-root/bin && \ 
+      sed -i "s/Listen 80/Listen 8080/g" /etc/httpd/conf/httpd.conf && \
+      sed -i "s/#ServerName www.example.com:80/ServerName 0.0.0.0:8080/g" /etc/httpd/conf/httpd.conf
+      
 # Copy the runnable fat JAR to the container.
 ADD   https://github.com/RedHatTraining/DO288-apps/releases/download/OCP-4.1-1/hello-java.jar /opt/app-root/bin/
 
 COPY  run-app.sh /opt/app-root/bin/
 
 RUN   chown -R wildfly:wildfly /opt/app-root && \
-      chmod -R 700 /opt/app-root
+      chmod -R 700 /opt/app-root && \
+      chgrp -R 0 /var/log/httpd /var/run/httpd && \
+      chmod -R g=u /var/log/httpd /var/run/httpd
 
 EXPOSE 8080
 
-USER  wildfly
+USER  1001
 
 # Run the fat JAR
 CMD   /opt/app-root/bin/run-app.sh
